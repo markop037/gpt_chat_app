@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>GPT Chat Simulation</title>
+</head>
+<body>
+    <h1>GPT Chat (test version)</h1>
+    <input type="text" id="message" placeholder="Enter your message">
+    <button onclick="sendMessage()">Send</button>
+    <button onclick="stopStream()">Stop</button>
+
+    <p><strong>Response:</strong></p>
+    <div id="response" style="border: 1px solid #ccc; padding: 10px; width: 400px;"></div>
+
+    <script>
+        let controller = null;
+
+        function sendMessage() {
+            const messageInput = document.getElementById('message');
+            const message = messageInput.value;
+            const responseBox = document.getElementById('response');
+            responseBox.textContent = "";
+
+            controller = new AbortController();
+            const signal = controller.signal;
+
+            fetch('/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({message: message}),
+                signal: signal
+            }).then(response => {
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder("utf-8");
+
+                function read() {
+                    reader.read().then(({ done, value }) => {
+                        if (done) return;
+                        const chunk = decoder.decode(value, { stream: true });
+                        const word = chunk.replace("data: ", "").trim();
+                        responseBox.textContent += word + " ";
+                        read();
+                    }).catch(error => {
+                        console.log("Stream stopped or error while reading:", error);
+                    });
+                }
+
+                read();
+            }).catch(error => {
+                console.log("Request aborted or error:", error);
+            });
+        }
+
+        function stopStream() {
+            if (controller) {
+                controller.abort();
+                controller = null;
+            }
+        }
+    </script>
+</body>
+</html>
