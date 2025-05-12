@@ -10,16 +10,20 @@ client = OpenAI(api_key="/")
 def get_openai_response(user_message):
     try:
         chat_completion = client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-3.5-turbo",
             messages=[
                 {"role": "user", "content": user_message}
             ],
             temperature=0.7,
-            max_tokens=150
+            max_tokens=150,
+            stream=True
         )
-        return chat_completion.choices[0].message.content.strip()
+        for chunk in chat_completion:
+            if chunk.choices and chunk.choices[0].delta.content:
+                yield f"data: {chunk.choices[0].delta.content}\n\n"
+                time.sleep(0.05)
     except Exception as e:
-        return f"[Error] {str(e)}"
+        yield f"data: [Error] {str(e)}\n\n"
 
 
 @app.route("/")
@@ -32,18 +36,7 @@ def chat():
     data = request.get_json()
     user_message = data.get("message", "")
 
-    def generate():
-        try:
-            response = get_openai_response(user_message)
-
-            for word in response.split():
-                yield f"data: {word}\n\n"
-                time.sleep(0.1)
-
-        except Exception as e:
-            yield f"data: [Error] {str(e)}\n\n"
-
-    return Response(generate(), content_type='text/event-stream')
+    return Response(get_openai_response(user_message), content_type='text/event-stream')
 
 
 if __name__ == "__main__":
